@@ -16,10 +16,10 @@
 
 set -e
 
-GITHUB_USER=${GITHUB_USER-"aagea"}
-REPO_PATH=${REPO_PATH-/opt/protolangs}
-CURRENT_BRANCH=${CURRENT_BRANCH-"branch-not-available"}
-DRY=${DRY-"false"}
+GITHUB_USER=${GITHUB_USER:-"aagea"}
+REPO_PATH=${REPO_PATH:-"/opt/protolangs"}
+CURRENT_BRANCH=${CURRENT_BRANCH:-"branch-not-available"}
+DRY=${DRY:-"false"}
 
 # Helper for adding a directory to the stack and echoing the result
 function enterDir {
@@ -46,26 +46,28 @@ function buildProtoForTypes {
 
       rm -rf ${REPO_PATH}/${reponame}
 
-      echo "Cloning repo: git@github.com:$GITHUB_USER/$reponame.git"
+      echo ">>> Cloning repo: git@github.com:$GITHUB_USER/$reponame.git"
 
       # Clone the repository down and set the branch to the automated one
       git clone git@github.com:${GITHUB_USER}/${reponame}.git ${REPO_PATH}/${reponame}
       setupBranch ${REPO_PATH}/${reponame}
 
       # Use the docker container for the language we care about and compile
-      docker run -v `pwd`:/defs namely/protoc-all:1.15 -d ${target} -i . -i /usr/local/include/google \
+      docker run -v ${REPO_PATH}:/defs namely/protoc-all:1.15 -d ${target} -i . -i /usr/local/include/google \
         -o ${target}/pb-${lang} -l ${lang} --with-docs --with-gateway \
       /
 
 
       # Copy the generated files out of the pb-* path into the repository
       # that we care about
-      cp -R pb-${lang}/github.com/${GITHUB_USER}/grpc-${target}-
-      cp -R pb-${lang}/* ${REPO_PATH}/${reponame}/
+      cp -R pb-${lang}/github.com/${GITHUB_USER}/grpc-${target}-${lang}/* ${REPO_PATH}/${reponame}
+      cp -R pb-${lang}/doc ${REPO_PATH}/${reponame}/
+      cp -R pb-${lang}/${target}/*.swagger.json ${REPO_PATH}/${reponame}/doc/.
 
-      if [["${DRY}" == "true"]]; then
-        echo "Commit and push stage is omitted"
+      if [ "${DRY}" == "true" ]; then
+        echo ">>> Commit and push stage is omitted"
       else
+        echo ">>> Push stage"
         commitAndPush ${REPO_PATH}/${reponame}
       fi
 
@@ -78,7 +80,7 @@ function buildProtoForTypes {
 function setupBranch {
   enterDir $1
 
-  echo "Creating branch"
+  echo ">>> Creating branch"
 
   if ! git show-branch ${CURRENT_BRANCH}; then
     git branch ${CURRENT_BRANCH}
@@ -87,7 +89,7 @@ function setupBranch {
   git checkout ${CURRENT_BRANCH}
 
   if git ls-remote --heads --exit-code origin $CURRENT_BRANCH; then
-    echo "Branch exists on remote, pulling latest changes"
+    echo ">>> Branch exists on remote, pulling latest changes"
     git pull origin ${CURRENT_BRANCH}
   fi
 
@@ -102,11 +104,11 @@ function commitAndPush {
   if ! git diff --exit-code > /dev/null; then
     # Defining the repository version
     if [[ ! -f VERSION ]]; then
-      echo "Creating version file"
+      echo ">>> Creating version file"
       echo "0.0.0" > VERSION
     fi
 
-    local currentVersion=cat VERSION
+    local currentVersion=`cat VERSION`
     local versionArr=(`echo ${currentVersion} | tr '.' ' '`)
     local majorVersion=${versionArr[0]}
     local minorVersion=${versionArr[1]}
@@ -114,7 +116,7 @@ function commitAndPush {
 
     local newPatchVersion=$((patchVersion+1))
     local newVersion="${majorVersion}.${minorVersion}.${newPatchVersion}"
-    echo "New Version: ${newVersion}"
+    echo ">>> New Version: ${newVersion}"
     echo ${newVersion} > VERSION
 
     git add .
@@ -125,7 +127,7 @@ function commitAndPush {
     git tag -a -m "Auto generated version ${newVersion}." "v${newVersion}"
     git push origin --tags
   else
-    echo "No changes detected for $1"
+    echo ">>> No changes detected for $1"
   fi
 
   leaveDir
@@ -135,7 +137,7 @@ function commitAndPush {
 # protobufs
 function buildDir {
   currentDir="$1"
-  echo "Building directory \"$currentDir\""
+  echo ">>> Building directory \"$currentDir\""
 
   enterDir ${currentDir}
 
@@ -147,7 +149,7 @@ function buildDir {
 function getUpdatedDirs {
  local  __resultvar=$1
   if ! [[ "$__resultvar" ]]; then
-    echo "getUpdatedDirs invoked exception"
+    echo ">>> getUpdatedDirs invoked exception"
     exit -1
   fi
 
@@ -170,22 +172,22 @@ function getUpdatedDirs {
   done
 
 
-  echo "Last commit merge: ${gitLastMergeCommit}"
+  echo ">>> Last commit merge: ${gitLastMergeCommit}"
   local modifiedResult=$(git diff --name-only ${gitLastCommit} ${gitLastMergeCommit} | grep "^.*\/.*.proto$" | awk -F/ '{print $1}')
-  echo "Modified directories: ${modifiedResult}"
+  echo ">>> Modified directories: ${modifiedResult}"
   eval ${__resultvar}="'$modifiedResult'"
 }
 
 
 
 function buildDiff {
- echo "Building only modified protocol directories"
+ echo ">>> Building only modified protocol directories"
  local dirs=""
  getUpdatedDirs dirs
 
  mkdir -p ${REPO_PATH}
  if [[ "$dirs" == "" ]]; then
-   echo "No protocol buffer was modified since last merge"
+   echo ">>> No protocol buffer was modified since last merge"
    exit 0
  fi
  for d in ${dirs}; do
@@ -197,7 +199,7 @@ function buildDiff {
 function buildTarget {
     TARGET=$1
     if ! [[ "${TARGET}" ]]; then
-        echo "Must indicate a target"
+        echo ">>> Must indicate a target"
         exit -1
     fi
     buildDir ${TARGET}
@@ -212,22 +214,23 @@ function buildAll {
 }
 
 function init {
-    echo "Building service's protocol buffers"
+    echo ">>> Building service's protocol buffers"
 
-    echo "GITHUB_USER = $GITHUB_USER"
-    echo "REPO_PATH = $REPO_PATH"
-    echo "CURRENT_BRANCH = $CURRENT_BRANCH"
-    echo "BUILD_OPTION = $BUILD_OPTION"
-    echo "DRY = $DRY"
+    echo ">>> GITHUB_USER = $GITHUB_USER"
+    echo ">>> REPO_PATH = $REPO_PATH"
+    echo ">>> CURRENT_BRANCH = $CURRENT_BRANCH"
+    echo ">>> BUILD_OPTION = $BUILD_OPTION"
+    echo ">>> DRY = $DRY"
 
     mkdir -p "$REPO_PATH"
 }
 
 BUILD_OPTION=$1
 if ! [[ "$BUILD_OPTION" ]]; then
-    echo "Must indicate the build option"
+    echo ">>> Must indicate the build option"
     exit -1
 fi
+
 init
 if [[ "${BUILD_OPTION}" == "all" ]]; then
    buildAll
@@ -236,6 +239,6 @@ elif [[ "${BUILD_OPTION}" == "diff" ]]; then
 elif [[ "${BUILD_OPTION}" == "target" ]]; then
    buildTarget $2
 else
-   echo "Must indicate a correct build option [all|diff|target]"
+   echo ">>> Must indicate a correct build option [all|diff|target]"
    exit -1
 fi

@@ -24,7 +24,7 @@ option go_package = "github.com/aagea/grpc-user-go";
 import "common/entities.proto";
 import "user/entities.proto";
 
-service User {
-    rpc CreateUser (User) returns (common.Void)
-    rpc DeleteUser (UserID) returns (common.Void)
+service Users {
+    rpc CreateUser (User) returns (common.Void);
+    rpc DeleteUser (UserID) returns (common.Void);
 }

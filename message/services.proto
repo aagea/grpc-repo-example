@@ -27,7 +27,7 @@ import "message/entities.proto";
 import "user/entities.proto";
 
 
-service Message {
+service Messages {
     rpc SendMessage (Message) returns (common.Void);
     rpc RecoverMessages (user.UserID) returns (MessageList);
 }

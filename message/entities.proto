@@ -30,6 +30,7 @@ message Message {
     user.UserID destination = 2;
     google.protobuf.Timestamp timestamp = 3;
     string Message = 4;
+    bool checked = 5;
 }
 
 message MessageList {
